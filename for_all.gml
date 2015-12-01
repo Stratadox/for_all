@@ -4,12 +4,15 @@
  * Initialises the for_all mechanism
  */
 
-global.for_all_values   = ds_stack_create();
-global.for_all_keys     = ds_stack_create();
-global.for_all_sizes    = ds_stack_create();
+global.for_all_values           = ds_stack_create();
+global.for_all_keys             = ds_stack_create();
+global.for_all_sizes            = ds_stack_create();
 
 global.for_all_current_key      = undefined;
 global.for_all_current_value    = undefined;
+
+global.for_all_is_first         = undefined;
+global.for_all_is_last          = undefined;
 
 #define for_all
 /** 
@@ -18,7 +21,11 @@ global.for_all_current_value    = undefined;
  *
  * @param   mixed input;                The array or data structure id or string to loop over
  * @param   real ds_type [optional];    The type of data structure to loop over
- * @param   real index [optional];      The index of the row or column to loop over
+ *                                      - In case of ds_type_grid_column, a third argument `column` is required
+ *                                      - In case of ds_type_grid_row, a third argument `row` is required
+ *                                      - In case of ds_type_custom, a third argument `script` is required
+ * @param   real index [optional];      The index of the row or column to loop over, or the id or name of the script to execute
+ *
  * @return  real;                       The amount of iterations
  */
 
@@ -28,14 +35,20 @@ var keys    = global.for_all_keys;
 var size    = 0;
 var i;
 
-if (is_array(input)) {
+if (argument_count > 1 && argument[1] == ds_type_custom) {
+    var script = argument[2];
+    if (is_string(script)) {
+        script = asset_get_index(script);
+    }
+    size = script_execute(script, input);
+} else if (is_array(input)) {
     size = array_length_1d(input);
     i = size;
     repeat (size) {
         ds_stack_push(values, input[--i]);
         ds_stack_push(keys, i);
     }
-} else if(is_string(input)) {
+} else if (is_string(input)) {
     size = string_length(input);
     i = size;
     repeat (size) {
@@ -49,9 +62,6 @@ if (is_array(input)) {
     }
     switch (type) {
         case ds_type_map:
-            if (!ds_exists(input, ds_type_map)) {
-                return 0;
-            }
             size = ds_map_size(input);
             i = ds_map_find_last(input);
             repeat (size) {
@@ -61,9 +71,6 @@ if (is_array(input)) {
             }
         break;
         case ds_type_list:
-            if (!ds_exists(input, ds_type_list)) {
-                return 0;
-            }
             size = ds_list_size(input);
             i = size;
             repeat (size) {
@@ -72,27 +79,21 @@ if (is_array(input)) {
             }
         break;
         case ds_type_grid:
-            if (!ds_exists(input, ds_type_grid)) {
-                return 0;
-            }
-            var _x, w = ds_grid_width(input);
-            var _y, h = ds_grid_height(input);
+            var col, w = ds_grid_width(input);
+            var row, h = ds_grid_height(input);
             var pos;
-            for (_y = h - 1; _y >= 0; --_y) {
-                for (_x = w - 1; _x >= 0; --_x) {
-                    ds_stack_push(values, ds_grid_get(input, _x, _y));
-                    pos[0] = _x;
-                    pos[1] = _y;
+            for (row = h - 1; row >= 0; --row) {
+                for (col = w - 1; col >= 0; --col) {
+                    ds_stack_push(values, ds_grid_get(input, col, row));
+                    pos[0] = col;
+                    pos[1] = row;
                     ds_stack_push(keys, pos);
-                    pos = false; // destroy the array to prevent overwriting the stack
+                    pos = false; // unlink the array to prevent overwriting the stack
                 }
             }
             size = w * h;
         break;
         case ds_type_grid_column:
-            if (!ds_exists(input, ds_type_grid)) {
-                return 0;
-            }
             var column = argument[2];
             size = ds_grid_height(input);
             i = size;
@@ -102,9 +103,6 @@ if (is_array(input)) {
             }
         break;
         case ds_type_grid_row:
-            if (!ds_exists(input, ds_type_grid)) {
-                return 0;
-            }
             var row = argument[2];
             size = ds_grid_width(input);
             i = size;
@@ -118,7 +116,11 @@ if (is_array(input)) {
 
 if (size) {
     ds_stack_push(global.for_all_sizes, size);
+    
+    global.for_all_is_first = 2;
+    global.for_all_is_last  = (size == 1);
 }
+
 return size;
 
 #define for_all_clear
@@ -153,6 +155,11 @@ do {
 global.for_all_current_key      = ds_stack_pop(global.for_all_keys);
 global.for_all_current_value    = ds_stack_pop(global.for_all_values);
 
+if (global.for_all_is_first) {
+    global.for_all_is_first--;
+}
+global.for_all_is_last = (!keys_left);
+
 #define stop_here
 /**
  * stop_here()
@@ -166,27 +173,6 @@ repeat (keys_left) {
     ds_stack_pop(global.for_all_keys);
     ds_stack_pop(global.for_all_values);
 }
-
-#define this_key
-/**
- * this_key([first=true])
- * Use to retrieve the current key and progress to the next iteration
- * Must be called once in each iteration of the loop
- * 
- * Beware! Use either this function or this_one() - not both!
- * 
- * @param   bool first [optional, default=true];    Whether or not this is called before this_value
- * @return  mixed;                                  The next key in the loop
- */
-
-var first = true;
-if (argument_count > 0) {
-    first = argument[0];
-}
-if (first) {
-    for_all_pop();
-}
-return global.for_all_current_key;
 
 #define this_one
 /**
@@ -202,21 +188,68 @@ return global.for_all_current_key;
 for_all_pop();
 return global.for_all_current_value;
 
+#define this_key
+/**
+ * this_key([pop=true])
+ * Use to retrieve the current key and progress to the next iteration
+ * Must be called once in each iteration of the loop
+ * 
+ * Beware! Use either this function or this_one() - not both!
+ * 
+ * @param   bool pop [optional, default=true];  Set to true if the loop still needs to iterate
+ *
+ * @return  mixed;                              The next key in the loop
+ */
+
+if (argument_count == 0 || argument[0]){
+    for_all_pop();
+}
+return global.for_all_current_key;
+
 #define this_value
 /**
- * this_value([first=false])
+ * this_value([pop=false])
  * Use to retrieve the current value
  * 
  * Beware! Do not confuse with this_one()
  * 
- * @param   bool first [optional, default=true];    Whether or not this is called before this_value
- * @return  mixed;                                  The next value in the loop
+ * @param   bool pop [optional, default=false]; Set to true if the loop still needs to iterate
+ *
+ * @return  mixed;                              The next value in the loop
  */
 
-if (argument_count > 0) {
-    if (argument[0]) {
-        for_all_pop();
-    }
+if (argument_count > 0 && argument[0]) {
+    for_all_pop();
 }
 return global.for_all_current_value;
+
+#define this_is_first
+/**
+ * this_is_first([pop=false])
+ * Use to check if this is the first iteration of the current loop
+ * 
+ * @param   bool pop [optional, default=false]; Set to true if the loop still needs to iterate
+ *
+ * @return  boolean;                            True if first, false otherwise
+ */
+
+if (argument_count > 0 && argument[0]) {
+    for_all_pop();
+}
+return !!global.for_all_is_first;
+
+#define this_is_last
+/**
+ * this_is_last([pop=false])
+ * Use to check if this is the last iteration of the current loop
+ * 
+ * @param   bool pop [optional, default=false]; Set to true if the loop still needs to iterate
+ *
+ * @return  boolean;                            True if last, false otherwise
+ */
+
+if (argument_count > 0 && argument[0]) {
+    for_all_pop();
+}
+return !!global.for_all_is_last;
 
