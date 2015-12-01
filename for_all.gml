@@ -137,6 +137,9 @@ ds_stack_clear(global.for_all_sizes);
 global.for_all_current_key      = undefined;
 global.for_all_current_value    = undefined;
 
+global.for_all_is_first         = undefined;
+global.for_all_is_last          = undefined;
+
 #define for_all_pop
 /**
  * for_all_pop()
