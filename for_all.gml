@@ -14,16 +14,25 @@ global.for_all_current_value    = undefined;
 global.for_all_is_first         = undefined;
 global.for_all_is_last          = undefined;
 
+enum treat_as {
+    list        = ds_type_list,
+    map         = ds_type_map,
+    grid        = ds_type_grid,
+    grid_row    = -1,
+    grid_column = -2,
+    custom      = -3,
+}
+
 #define for_all
 /** 
- * for_all(input, [ds_type], [index])
+ * for_all(input, [treat_as], [index])
  * Call to initiate a for_all loop over an array or other data structure.
  *
  * @param   mixed input;                The array or data structure id or string to loop over
- * @param   real ds_type [optional];    The type of data structure to loop over
- *                                      - In case of ds_type_grid_column, a third argument `column` is required
- *                                      - In case of ds_type_grid_row, a third argument `row` is required
- *                                      - In case of ds_type_custom, a third argument `script` is required
+ * @param   real treat_as [optional];   The type of data structure to loop over
+ *                                      - In case of treat_as.grid_column, a third argument `column_id` is required
+ *                                      - In case of treat_as.grid_row, a third argument `row_id` is required
+ *                                      - In case of treat_as.custom, a third argument `script` is required
  * @param   real index [optional];      The index of the row or column to loop over, or the id or name of the script to execute
  *
  * @return  real;                       The amount of iterations
@@ -35,7 +44,7 @@ var keys    = global.for_all_keys;
 var size    = 0;
 var i;
 
-if (argument_count > 1 && argument[1] == ds_type_custom) {
+if (argument_count > 1 && argument[1] == treat_as.custom) {
     var script = argument[2];
     if (is_string(script)) {
         script = asset_get_index(script);
@@ -45,70 +54,68 @@ if (argument_count > 1 && argument[1] == ds_type_custom) {
     size = array_length_1d(input);
     i = size;
     repeat (size) {
-        ds_stack_push(values, input[--i]);
-        ds_stack_push(keys, i);
+        i--;
+        for_all_push(i, input[i]);
     }
 } else if (is_string(input)) {
     size = string_length(input);
     i = size;
     repeat (size) {
-        ds_stack_push(values, string_char_at(input, i));
-        ds_stack_push(keys, i--);
+        for_all_push(i, string_char_at(input, i));
+        i--;
     }
 } else if (is_real(input)) {
-    var type = ds_type_list;
+    var type = treat_as.list;
     if (argument_count > 1) {
         type = argument[1];
     }
     switch (type) {
-        case ds_type_map:
+        case treat_as.map:
             size = ds_map_size(input);
             i = ds_map_find_last(input);
             repeat (size) {
-                ds_stack_push(values, ds_map_find_value(input, i));
-                ds_stack_push(keys, i);
+                for_all_push(i, ds_map_find_value(input, i));
                 i = ds_map_find_previous(input, i);
             }
         break;
-        case ds_type_list:
+        case treat_as.list:
             size = ds_list_size(input);
             i = size;
             repeat (size) {
-                ds_stack_push(values, ds_list_find_value(input, --i));
-                ds_stack_push(keys, i);
+                i--;
+                for_all_push(i, ds_list_find_value(input, i));
             }
         break;
-        case ds_type_grid:
+        case treat_as.grid:
             var col, w = ds_grid_width(input);
             var row, h = ds_grid_height(input);
             var pos;
             for (row = h - 1; row >= 0; --row) {
                 for (col = w - 1; col >= 0; --col) {
-                    ds_stack_push(values, ds_grid_get(input, col, row));
                     pos[0] = col;
                     pos[1] = row;
-                    ds_stack_push(keys, pos);
+                    for_all_push(pos, ds_grid_get(input, col, row));
                     pos = false; // unlink the array to prevent overwriting the stack
                 }
             }
             size = w * h;
         break;
-        case ds_type_grid_column:
+        case treat_as.grid_column:
             var column = argument[2];
             size = ds_grid_height(input);
             i = size;
             repeat (size) {
-                ds_stack_push(values, ds_grid_get(input, column, --i));
-                ds_stack_push(keys, i);
+                i--;
+                for_all_push(i, ds_grid_get(input, column, i));
             }
         break;
-        case ds_type_grid_row:
+        case treat_as.grid_row:
             var row = argument[2];
             size = ds_grid_width(input);
             i = size;
             repeat (size) {
-                ds_stack_push(values, ds_grid_get(input, --i, row));
-                ds_stack_push(keys, i);
+                i--;
+                for_all_push(i, ds_grid_get(input, i, row));
             }
         break;
     }
@@ -162,6 +169,19 @@ if (global.for_all_is_first) {
     global.for_all_is_first--;
 }
 global.for_all_is_last = (!keys_left);
+
+#define for_all_push
+/**
+ * for_all_push(key, value)
+ * Used internally or by an extension script to add an
+ * entry to the for_all stacks
+ *
+ * @param mixed key;    The key or index to push
+ * @param mixed value;  The value to go along with it
+ */
+
+ds_stack_push(global.for_all_keys, argument0);
+ds_stack_push(global.for_all_values, argument1);
 
 #define stop_here
 /**
