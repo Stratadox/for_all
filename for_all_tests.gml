@@ -74,7 +74,7 @@ ds_map_add(items, 'health potion', 10);
 ds_map_add(items, 'mana potion', 5);
 ds_map_add(items, 'gold', 100);
 
-repeat for_all(items, ds_type_map) {
+repeat for_all(items, treat_as.map) {
     actual += this_one();
 }
 ds_map_destroy(items);
@@ -128,7 +128,7 @@ test[1] = 36;
 var cases = ds_grid_create(3, 3);
 ds_grid_clear(cases, 4);
 
-repeat for_all(cases, ds_type_grid) {
+repeat for_all(cases, treat_as.grid) {
     actual += this_one();
 }
 
@@ -154,7 +154,7 @@ test[1] = 16;
 var cases = ds_grid_create(3, 4);
 ds_grid_clear(cases, 4);
 
-repeat for_all(cases, ds_type_grid_column, 1) {
+repeat for_all(cases, treat_as.grid_column, 1) {
     actual += this_one();
 }
 
@@ -180,7 +180,7 @@ test[1] = 12;
 var cases = ds_grid_create(3, 4);
 ds_grid_clear(cases, 4);
 
-repeat for_all(cases, ds_type_grid_row, 1) {
+repeat for_all(cases, treat_as.grid_row, 1) {
     actual += this_one();
 }
 
@@ -210,7 +210,7 @@ var cases = ds_grid_create(3, 4);
 ds_grid_clear(cases, 4);
 ds_grid_set(cases, 2, 3, 5)
 
-repeat for_all(cases, ds_type_grid) {
+repeat for_all(cases, treat_as.grid) {
     if (this_one() == 5) {
         actual = this_key(false);
     }
@@ -325,17 +325,17 @@ return test;
 /**
  * test_for_all_custom()
  * Called by the GmUnit test framework to initiate
- * a test asserting that the ds_type_custom feature works correctly
+ * a test asserting that the treat_as.custom feature works correctly
  * 
  * @return array; The expected value and actual result
  */ 
 
 var test, actual = '';
 
-test[2] = 'The for_all loop should be extensible through ds_type_custom';
+test[2] = 'The for_all loop should be extensible through treat_as.custom';
 test[1] = 'eeeeee';
 
-repeat for_all('The for_all loop should be extensible through ds_type_custom', ds_type_custom, 'testscript_for_all_e') {
+repeat for_all('The for_all loop should be extensible through treat_as.custom', treat_as.custom, testscript_for_all_e) {
     actual += this_one();
 }
 
@@ -359,8 +359,8 @@ var keys    = global.for_all_keys;
 var i       = size;
 
 repeat (size) {
-    ds_stack_push(values, 'e');
-    ds_stack_push(keys, i--);
+    for_all_push(i, 'e');
+    i--;
 }
 
 return size;
