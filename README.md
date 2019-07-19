@@ -159,7 +159,6 @@ The example above would end up executing output('great') three times.
 
 This system works by pushing the data structure in reverse order to a global stack structure.
 It therefore acts as queue for the array internally, but as stack on a per-batch level.
-(Here's a link to the most simple implementation of the concept.)
 
 The advantage of this structure is that it allows for nesting the loops.
 Another could be that it is possible to alter the array that is being looped over, without compromising the loop execution.
